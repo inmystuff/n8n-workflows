@@ -1,0 +1,252 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "function extractArray(possible){\n  if(!possible) return [];\n  if(Array.isArray(possible)) {\n    // items[0] when Multiple Inputs -> array of item objects\n    // or items when single input already\n    if(possible.length && possible[0].json !== undefined) return possible.map(i => i.json);\n    // maybe already array of plain objects\n    return possible;\n  }\n  // single item object\n  if(possible.json !== undefined) return [possible.json];\n  return [];\n}\n\n// Try multiple inputs first, else single stream\nconst csvSource = items[1] || null;\nconst jsonSource = items[0] || null;\n\n// If items[0] is actually the whole items array (single input), detect that:\nlet csvArray = extractArray(csvSource);\nlet jsonArray = extractArray(jsonSource);\n\nif(csvArray.length === 0 && jsonArray.length === 0){\n  // fallback: treat whole items as mixed stream and split by marker\n  const all = items.map(i => i.json);\n  csvArray = all.filter(x => x._source === 'csv' || x.source === 'csv' || ('yourCsvUniqueField' in x));\n  jsonArray = all.filter(x => x._source === 'json' || x.source === 'json' || ('yourJsonUniqueField' in x));\n}\n\n// Теперь сравнение по ключу id\nconst key = 'id';\nconst mapJson = new Map(jsonArray.map(r => [String(r[key] ?? ''), r]));\n\nconst onlyInCsv = [], onlyInJson = [], changed = [], same = [];\n\nfor (const l of csvArray) {\n  const k = String(l[key] ?? '');\n  const r = mapJson.get(k);\n  if (!r) onlyInCsv.push(l);\n  else {\n    const equal = JSON.stringify(l) === JSON.stringify(r);\n    if (equal) same.push(l);\n    else changed.push({ id: k, csv: l, json: r });\n    mapJson.delete(k);\n  }\n}\nfor (const r of mapJson.values()) onlyInJson.push(r);\n\nconst different = onlyInCsv.length > 0 || onlyInJson.length > 0;\n\nreturn [{\n  json: {\n    onlyInCsv,\n    onlyInJson,\n    changed,\n    same,\n    different\n  }\n}];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        208
+      ],
+      "id": "c4babc18-18ba-46da-bce9-73dd6a509d2f",
+      "name": "Code in JavaScript",
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bfb5b0a5-192c-449c-a456-ae9cac2e7a43",
+              "leftValue": "={{ $json.different }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c95bf63d-1918-4c58-b6b8-b27e855f2bbd",
+              "leftValue": "={{ $json.different }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        208
+      ],
+      "id": "7fa7d338-9aee-436e-be66-34468486ce79",
+      "name": "If",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        160
+      ],
+      "id": "84d68276-5949-4349-8a1f-685948922ac8",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://xmlcalendar.ru/data/ru/2022/calendar.csv",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -272,
+        64
+      ],
+      "id": "bbaf973d-caae-41d6-adf1-1fbdcdc6013e",
+      "name": "Запрос CSV"
+    },
+    {
+      "parameters": {
+        "url": "http://xmlcalendar.ru/data/ru/2022/calendar.json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -304,
+        336
+      ],
+      "id": "aa9ba475-0ed9-48d6-b7de-8cbccc5dafd9",
+      "name": "Запрос JSON"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "50c0bf5d-8b2a-4180-8eae-8b3113665b09",
+              "name": "Данные различаются!",
+              "value": "{ \"status\": \"error\", \"message\": \"Данные различаются!\" }",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        320
+      ],
+      "id": "f7d19dbd-f94a-4795-9d54-d173aa453e7c",
+      "name": "Файлы идентичны"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "50c0bf5d-8b2a-4180-8eae-8b3113665b09",
+              "name": "CSV и JSON идентичны",
+              "value": "{ \"status\": \"success\", \"message\": \"CSV и JSON идентичны\" }",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        64
+      ],
+      "id": "253aa608-e701-453e-bf4e-c4e151c96b65",
+      "name": "Файлы различаются"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Файлы различаются",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Файлы идентичны",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Запрос CSV",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Запрос JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Запрос CSV": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Запрос JSON": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "0e8c1d6d-8124-4650-957d-edaddb3d1e7f",
+  "meta": {
+    "instanceId": "40a29bca827bfd1764bc32ddaf68f5e15c7144077835ef936ccdf21cd0672258"
+  },
+  "id": "9JvNQolLdKRH0haW",
+  "tags": []
+}
